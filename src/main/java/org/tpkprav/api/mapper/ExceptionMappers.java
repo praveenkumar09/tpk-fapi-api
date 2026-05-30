@@ -2,18 +2,17 @@ package org.tpkprav.api.mapper;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Path;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
-import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.RestResponse;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 import org.tpkprav.api.ApiError;
 import org.tpkprav.api.ApiErrorDetail;
 import org.tpkprav.api.ApiResponse;
 import org.tpkprav.api.RequestContext;
+import org.tpkprav.logging.AsyncLogger;
 import org.tpkprav.service.exception.BadSignatureException;
 import org.tpkprav.service.exception.ExpiredTokenException;
 import org.tpkprav.service.exception.InvalidTokenException;
@@ -25,7 +24,7 @@ import java.util.UUID;
 @ApplicationScoped
 public class ExceptionMappers {
 
-    private static final Logger LOG = Logger.getLogger(ExceptionMappers.class);
+    private static final AsyncLogger log = AsyncLogger.of(ExceptionMappers.class);
 
     @Inject
     RequestContext requestContext;
@@ -37,6 +36,7 @@ public class ExceptionMappers {
             case BadSignatureException ignored -> "AUTH_BAD_SIGNATURE";
             case MalformedTokenException ignored -> "AUTH_MALFORMED_TOKEN";
         };
+        log.warn("Token rejected code={} message={}", code, e.getMessage());
         return RestResponse.status(
                 Response.Status.UNAUTHORIZED,
                 ApiResponse.error(currentRequestId(), ApiError.of(code, e.getMessage())));
@@ -47,6 +47,7 @@ public class ExceptionMappers {
         List<ApiErrorDetail> details = e.getConstraintViolations().stream()
                 .map(v -> new ApiErrorDetail(lastNode(v.getPropertyPath()), v.getMessage()))
                 .toList();
+        log.warn("Validation failed violations={}", details.size());
         return RestResponse.status(
                 Response.Status.BAD_REQUEST,
                 ApiResponse.error(
@@ -57,6 +58,7 @@ public class ExceptionMappers {
     @ServerExceptionMapper
     public RestResponse<ApiResponse<Object>> mapWebApplication(WebApplicationException e) {
         int status = e.getResponse().getStatus();
+        log.warn("HTTP {} {}", status, e.getMessage());
         return RestResponse.status(
                 Response.Status.fromStatusCode(status),
                 ApiResponse.error(
@@ -66,7 +68,7 @@ public class ExceptionMappers {
 
     @ServerExceptionMapper
     public RestResponse<ApiResponse<Object>> mapUnexpected(Throwable e) {
-        LOG.error("Unhandled exception", e);
+        log.error("Unhandled exception", e);
         return RestResponse.status(
                 Response.Status.INTERNAL_SERVER_ERROR,
                 ApiResponse.error(

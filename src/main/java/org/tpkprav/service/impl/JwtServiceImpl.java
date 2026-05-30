@@ -10,6 +10,7 @@ import com.nimbusds.jwt.SignedJWT;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.tpkprav.logging.AsyncLogger;
 import org.tpkprav.service.JwtService;
 import org.tpkprav.service.exception.BadSignatureException;
 import org.tpkprav.service.exception.ExpiredTokenException;
@@ -24,6 +25,8 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class JwtServiceImpl implements JwtService {
+
+    private static final AsyncLogger log = AsyncLogger.of(JwtServiceImpl.class);
 
     @ConfigProperty(name = "jwt.secret")
     String secret;
@@ -43,26 +46,30 @@ public class JwtServiceImpl implements JwtService {
             throw new IllegalStateException(
                     "jwt.secret must decode to at least 32 bytes for HS256; got " + secretBytes.length);
         }
+        log.info("JWT signing initialized alg=HS256 issuer={} expirationMinutes={}", issuer, expirationMinutes);
     }
 
     @Override
     public String createToken(Map<String, Object> claims) {
         Instant now = Instant.now();
         Instant exp = now.plusSeconds(expirationMinutes * 60);
+        String jti = UUID.randomUUID().toString();
 
         JWTClaimsSet.Builder builder = new JWTClaimsSet.Builder()
                 .issuer(issuer)
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(exp))
-                .jwtID(UUID.randomUUID().toString());
+                .jwtID(jti);
         claims.forEach(builder::claim);
 
         SignedJWT jwt = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), builder.build());
         try {
             jwt.sign(new MACSigner(secretBytes));
         } catch (JOSEException e) {
+            log.error("Failed to sign JWT jti={}", jti, e);
             throw new IllegalStateException("Failed to sign JWT", e);
         }
+        log.debug("Signed JWT jti={} exp={}", jti, exp);
         return jwt.serialize();
     }
 
