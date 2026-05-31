@@ -9,6 +9,7 @@ import org.tpkprav.api.RequestContext;
 import org.tpkprav.dto.TokenRequest;
 import org.tpkprav.dto.TokenResponse;
 import org.tpkprav.logging.AsyncLogger;
+import org.tpkprav.util.MaskingUtils;
 
 @ApplicationScoped
 public class TokenFallbackHandler implements FallbackHandler<TokenResponse> {
@@ -23,7 +24,7 @@ public class TokenFallbackHandler implements FallbackHandler<TokenResponse> {
         String maskedNric = "****";
         if (context.getParameters().length > 0
                 && context.getParameters()[0] instanceof TokenRequest req) {
-            maskedNric = AuthController.maskNric(req.nric());
+            maskedNric = MaskingUtils.maskNric(req.nric());
         }
         log.warn("requestId={} Token service unavailable (circuit open or retries exhausted) nric={}",
                 requestContext.getRequestId(), maskedNric);

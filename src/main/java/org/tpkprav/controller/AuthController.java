@@ -15,12 +15,15 @@ import org.eclipse.microprofile.faulttolerance.Retry;
 import org.tpkprav.api.RequestContext;
 import org.tpkprav.dto.TokenRequest;
 import org.tpkprav.dto.TokenResponse;
+import io.smallrye.common.annotation.RunOnVirtualThread;
 import org.tpkprav.logging.AsyncLogger;
 import org.tpkprav.service.JwtService;
+import org.tpkprav.util.MaskingUtils;
 
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
 
+@RunOnVirtualThread
 @Path("/v1/auth")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
@@ -45,7 +48,7 @@ public class AuthController {
     @Fallback(value = TokenFallbackHandler.class, skipOn = {jakarta.validation.ConstraintViolationException.class})
     public TokenResponse token(@Valid TokenRequest request) {
         String reqId = requestContext.getRequestId();
-        log.info("requestId={} Issuing access token nric={} uuid={}", reqId, maskNric(request.nric()), request.uuid());
+        log.info("requestId={} Issuing access token nric={} uuid={}", reqId, MaskingUtils.maskNric(request.nric()), request.uuid());
         String accessToken = jwtService.createToken(Map.of(
                 "nric", request.nric(),
                 "uuid", request.uuid()
@@ -55,10 +58,4 @@ public class AuthController {
         return new TokenResponse(accessToken, "Bearer", expiresIn);
     }
 
-    static String maskNric(String nric) {
-        if (nric == null || nric.length() < 4) {
-            return "****";
-        }
-        return "*".repeat(nric.length() - 4) + nric.substring(nric.length() - 4);
-    }
 }
