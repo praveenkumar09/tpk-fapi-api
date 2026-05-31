@@ -63,7 +63,7 @@
         <!-- Test -->
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-junit5</artifactId>
+            <artifactId>quarkus-junit</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -73,7 +73,7 @@
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-junit5-mockito</artifactId>
+            <artifactId>quarkus-junit-mockito</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -82,22 +82,9 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.intuit.karate</groupId>
+            <groupId>io.karatelabs</groupId>
             <artifactId>karate-junit5</artifactId>
-            <version>1.4.1</version>
-            <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>ch.qos.logback</groupId>
-                    <artifactId>logback-classic</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <!-- Override karate's classgraph to a version that handles Quarkus 3.x class loaders -->
-        <dependency>
-            <groupId>io.github.classgraph</groupId>
-            <artifactId>classgraph</artifactId>
-            <version>4.8.180</version>
+            <version>1.5.1</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

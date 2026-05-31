@@ -8,8 +8,8 @@ public class KarateTestProfile implements QuarkusTestProfile {
 
     @Override
     public Map<String, String> getConfigOverrides() {
-        // Run on a dedicated port so the Karate test never conflicts
-        // with the main test suite's port 8081
+        // Port 0 lets the OS pick a free port — avoids conflicts with the main suite
+        // and with stale processes from crashed prior runs
         return Map.of("quarkus.http.test-port", "8083");
     }
 }
