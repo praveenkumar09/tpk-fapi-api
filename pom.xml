@@ -60,6 +60,12 @@
             <artifactId>quarkus-smallrye-fault-tolerance</artifactId>
         </dependency>
 
+        <!-- MicroProfile REST Client -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-rest-client</artifactId>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>io.quarkus</groupId>

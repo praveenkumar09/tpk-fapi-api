@@ -58,12 +58,19 @@ public class ExceptionMappers {
     @ServerExceptionMapper
     public RestResponse<ApiResponse<Object>> mapWebApplication(WebApplicationException e) {
         int status = e.getResponse().getStatus();
+        String code;
+        String message;
+        if (status == 409) {
+            code = "DUPLICATE_UUID_001";
+            message = "UUID already registered";
+        } else {
+            code = "HTTP_" + status;
+            message = e.getMessage();
+        }
         log.warn("HTTP {} {}", status, e.getMessage());
         return RestResponse.status(
                 Response.Status.fromStatusCode(status),
-                ApiResponse.error(
-                        currentRequestId(),
-                        ApiError.of("HTTP_" + status, e.getMessage())));
+                ApiResponse.error(currentRequestId(), ApiError.of(code, message)));
     }
 
     @ServerExceptionMapper
