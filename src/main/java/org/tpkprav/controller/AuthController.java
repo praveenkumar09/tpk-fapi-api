@@ -65,7 +65,7 @@ public class AuthController {
         log.info("requestId={} Token request received nric={} uuid={}",
                 reqId, MaskingUtils.maskNric(request.nric()), request.uuid());
 
-        StoreResponse stored = dbConnectorClient.store(new StoreRequest(request.nric(), request.uuid()));
+        StoreResponse stored = dbConnectorClient.store(new StoreRequest(request.nric(), request.uuid()), reqId);
         log.debug("requestId={} Credential stored status={}", reqId, stored.status());
 
         if (!"stored".equals(stored.status())) {
