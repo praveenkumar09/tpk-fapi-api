@@ -197,6 +197,7 @@ The server starts on `http://localhost:8080`. All endpoints are reachable at `ht
 | [Mockito](https://site.mockito.org/) | `@InjectMock` / `@MockBean` for unit-level isolation |
 | [Karate 1.5.1](https://karatelabs.github.io/karate/) | BDD API tests via `.feature` files |
 | [JaCoCo](https://www.jacoco.org/) | Code coverage reporting |
+| [PITest 1.20](https://pitest.org/) + [JUnit 5 plugin](https://github.com/hcoles/pitest) | Mutation testing for unit and service layer |
 
 ### Running Tests
 
@@ -207,8 +208,11 @@ The server starts on `http://localhost:8080`. All endpoints are reachable at `ht
 # Single test class
 ./mvnw test -Dtest=AuthApiKarateTest
 
-# Tests + coverage report (output: target/site/jacoco/index.html)
+# Tests + JaCoCo coverage report (output: target/site/jacoco/index.html)
 ./mvnw verify
+
+# Mutation testing only (output: target/pit-reports/index.html)
+./mvnw pitest:mutationCoverage
 ```
 
 ### Test Profiles
@@ -223,6 +227,46 @@ The server starts on `http://localhost:8080`. All endpoints are reachable at `ht
 | `karate/greeting.feature` | 1 — smoke test for the greeting endpoint |
 
 Karate reports are generated at `target/karate-reports/karate-summary.html` after each run.
+
+---
+
+## Mutation Testing
+
+Mutation testing is configured with [PITest](https://pitest.org/) and the JUnit 5 plugin. It verifies that the unit tests are strong enough to detect real code defects, not just achieve line coverage.
+
+### Scope
+
+Only classes testable by pure JUnit 5 unit tests are included. `@QuarkusTest` classes (which start a full Quarkus container) are excluded because PITest cannot drive Quarkus' classloader.
+
+| Layer | Mutated classes | Test classes used |
+|---|---|---|
+| Util | `MaskingUtils` | `MaskingUtilsTest` |
+| API model | `ApiResponse`, `ApiError`, `ApiErrorDetail`, `Status`, `RequestContext` | `ModelAndDtoTest` |
+| API mapper | `ExceptionMappers` | `ExceptionMappersTest` |
+| DTO | `TokenRequest`, `TokenResponse` | `ModelAndDtoTest` |
+| Service exceptions | `InvalidTokenException`, `ExpiredTokenException`, `BadSignatureException`, `MalformedTokenException` | `ModelAndDtoTest`, `ExceptionMappersTest` |
+
+### Thresholds
+
+| Metric | Threshold | Current result |
+|---|---|---|
+| Mutation score | ≥ 80 % | **95 %** (19 / 20 mutations killed) |
+| Line coverage | ≥ 80 % | **100 %** |
+
+The build fails automatically if either threshold is not met.
+
+### Configuration notes
+
+- `avoidCallsTo` is set for `AsyncLogger` and `RequestContext` — mutations on logging calls and request-context setters are structurally undetectable without a dedicated log-capture harness and are not considered meaningful business-logic mutations.
+- `timestampedReports=false` so the HTML report always lands at `target/pit-reports/index.html` (no timestamped sub-folder).
+- Runs with 2 parallel threads for faster execution.
+
+### Viewing the report
+
+```bash
+./mvnw pitest:mutationCoverage
+open target/pit-reports/index.html
+```
 
 ---
 

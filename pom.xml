@@ -146,6 +146,64 @@
                 </configuration>
             </plugin>
             <plugin>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-maven</artifactId>
+                <version>1.20.0</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-junit5-plugin</artifactId>
+                        <version>1.2.3</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <!-- Mutate only classes covered by pure unit tests -->
+                    <targetClasses>
+                        <param>org.tpkprav.util.*</param>
+                        <param>org.tpkprav.api.*</param>
+                        <param>org.tpkprav.dto.*</param>
+                        <param>org.tpkprav.service.exception.*</param>
+                    </targetClasses>
+                    <!-- Exclude filter layer (no unit test) and AsyncLogger (mutations in its
+                         background virtual-thread executor are undetectable synchronously) -->
+                    <excludedClasses>
+                        <param>org.tpkprav.api.filter.*</param>
+                    </excludedClasses>
+                    <!-- Run only pure JUnit 5 unit tests — no @QuarkusTest classes -->
+                    <targetTests>
+                        <param>org.tpkprav.util.MaskingUtilsTest</param>
+                        <param>org.tpkprav.ModelAndDtoTest</param>
+                        <param>org.tpkprav.ExceptionMappersTest</param>
+                    </targetTests>
+                    <!-- Skip mutations for calls to logging and request-context infrastructure.
+                         Log-call mutations (AsyncLogger.warn/error) are undetectable without
+                         a log-capture harness; RequestContext.setRequestId is framework
+                         plumbing verified by integration tests, not unit tests. -->
+                    <avoidCallsTo>
+                        <avoidCallsTo>org.tpkprav.logging.AsyncLogger</avoidCallsTo>
+                        <avoidCallsTo>org.tpkprav.api.RequestContext</avoidCallsTo>
+                    </avoidCallsTo>
+                    <!-- 80 % mutation score and line-coverage thresholds -->
+                    <mutationThreshold>80</mutationThreshold>
+                    <coverageThreshold>80</coverageThreshold>
+                    <!-- Single timestamped directory so index.html is always at a fixed path -->
+                    <timestampedReports>false</timestampedReports>
+                    <outputFormats>
+                        <outputFormat>HTML</outputFormat>
+                    </outputFormats>
+                    <threads>2</threads>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>mutation-coverage</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>mutationCoverage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>0.8.12</version>
