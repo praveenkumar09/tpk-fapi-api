@@ -2,9 +2,15 @@ package org.tpkprav;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
 import io.restassured.http.ContentType;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.tpkprav.client.DbConnectorClient;
+import org.tpkprav.client.dto.StoreRequest;
+import org.tpkprav.client.dto.StoreResponse;
 import org.tpkprav.service.JwtService;
 import org.tpkprav.service.exception.BadSignatureException;
 import org.tpkprav.service.exception.ExpiredTokenException;
@@ -22,10 +28,21 @@ import static org.mockito.ArgumentMatchers.any;
  * The 401 paths (mapInvalidToken) are covered by ExceptionMappersTest.
  */
 @QuarkusTest
+@TestProfile(FaultToleranceTestProfile.class)
 class FaultToleranceTest {
 
     @InjectMock
+    @RestClient
+    DbConnectorClient dbConnectorClient;
+
+    @InjectMock
     JwtService jwtService;
+
+    @BeforeEach
+    void stubDbConnector() {
+        Mockito.when(dbConnectorClient.store(Mockito.any(StoreRequest.class), Mockito.anyString()))
+               .thenReturn(new StoreResponse("stored", "Credential saved successfully"));
+    }
 
     private static final String TOKEN_PATH = "/v1/auth/token";
     private static final String VALID_BODY =

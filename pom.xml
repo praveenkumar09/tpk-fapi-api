@@ -65,6 +65,10 @@
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-rest-client</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-rest-client-jackson</artifactId>
+        </dependency>
 
         <!-- Test -->
         <dependency>
@@ -168,6 +172,7 @@
                         <param>org.tpkprav.util.*</param>
                         <param>org.tpkprav.api.*</param>
                         <param>org.tpkprav.dto.*</param>
+                        <param>org.tpkprav.client.dto.*</param>
                         <param>org.tpkprav.service.exception.*</param>
                     </targetClasses>
                     <!-- Exclude filter layer (no unit test) and AsyncLogger (mutations in its
@@ -181,6 +186,14 @@
                         <param>org.tpkprav.ModelAndDtoTest</param>
                         <param>org.tpkprav.ExceptionMappersTest</param>
                     </targetTests>
+                    <excludedTestClasses>
+                        <param>org.tpkprav.AuthControllerTest</param>
+                        <param>org.tpkprav.FaultToleranceTest</param>
+                        <param>org.tpkprav.AuthApiKarateTest</param>
+                        <param>org.tpkprav.JwtServiceImplTest</param>
+                        <param>org.tpkprav.AsyncLoggerTest</param>
+                        <param>org.tpkprav.GreetingResourceTest</param>
+                    </excludedTestClasses>
                     <!-- Skip mutations for calls to logging and request-context infrastructure.
                          Log-call mutations (AsyncLogger.warn/error) are undetectable without
                          a log-capture harness; RequestContext.setRequestId is framework

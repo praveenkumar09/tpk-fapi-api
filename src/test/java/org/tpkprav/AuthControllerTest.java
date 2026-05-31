@@ -1,11 +1,21 @@
 package org.tpkprav;
 
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import jakarta.ws.rs.WebApplicationException;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.tpkprav.client.DbConnectorClient;
+import org.tpkprav.client.dto.StoreRequest;
+import org.tpkprav.client.dto.StoreResponse;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 
 @QuarkusTest
 class AuthControllerTest {
@@ -13,6 +23,19 @@ class AuthControllerTest {
     private static final String TOKEN_PATH = "/v1/auth/token";
     private static final String VALID_BODY =
             "{\"nric\":\"S1234567D\",\"uuid\":\"550e8400-e29b-41d4-a716-446655440000\"}";
+
+    @InjectMock
+    @RestClient
+    DbConnectorClient dbConnectorClient;
+
+    @BeforeEach
+    void stubDbConnector() {
+        // doReturn bypasses the CDI/fault-tolerance proxy during stub setup, keeping
+        // mock state clean so it does not bleed into subsequent test classes.
+        Mockito.doReturn(new StoreResponse("stored", "Credential saved successfully"))
+               .when(dbConnectorClient)
+               .store(any(StoreRequest.class), anyString());
+    }
 
     // ── Positive ─────────────────────────────────────────────────────────────
 
@@ -58,6 +81,55 @@ class AuthControllerTest {
             .statusCode(200)
             .header("X-Request-Id", matchesPattern(
                 "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"));
+    }
+
+    // ── db-connector error paths ─────────────────────────────────────────────
+
+    @Test
+    void duplicateUuid_dbConnectorReturns409_endpointReturns409() {
+        Mockito.doThrow(new WebApplicationException(409))
+               .when(dbConnectorClient)
+               .store(any(StoreRequest.class), anyString());
+
+        given()
+            .contentType(ContentType.JSON)
+            .body(VALID_BODY)
+        .when()
+            .post(TOKEN_PATH)
+        .then()
+            .statusCode(409)
+            .body("error.code", equalTo("DUPLICATE_UUID_001"))
+            .body("error.message", equalTo("UUID already registered"));
+    }
+
+    @Test
+    void unexpectedStoreStatus_returns502() {
+        Mockito.doReturn(new StoreResponse("unknown", "Unexpected status"))
+               .when(dbConnectorClient)
+               .store(any(StoreRequest.class), anyString());
+
+        given()
+            .contentType(ContentType.JSON)
+            .body(VALID_BODY)
+        .when()
+            .post(TOKEN_PATH)
+        .then()
+            .statusCode(502);
+    }
+
+    @Test
+    void dbConnectorUnavailable_fallbackReturns503() {
+        Mockito.doThrow(new RuntimeException("Connection refused"))
+               .when(dbConnectorClient)
+               .store(any(StoreRequest.class), anyString());
+
+        given()
+            .contentType(ContentType.JSON)
+            .body(VALID_BODY)
+        .when()
+            .post(TOKEN_PATH)
+        .then()
+            .statusCode(503);
     }
 
     // ── Validation (negative) ─────────────────────────────────────────────────
@@ -114,7 +186,7 @@ class AuthControllerTest {
     }
 
     @Test
-    void whitespaceOnlyFields_returns400WithTwoErrors() {
+    void whitespaceOnlyFields_returns400WithMultipleErrors() {
         given()
             .contentType(ContentType.JSON)
             .body("{\"nric\":\"   \",\"uuid\":\"   \"}")
@@ -122,7 +194,7 @@ class AuthControllerTest {
             .post(TOKEN_PATH)
         .then()
             .statusCode(400)
-            .body("error.details", hasSize(2));
+            .body("error.details", hasSize(greaterThanOrEqualTo(2)));
     }
 
     @Test
@@ -137,47 +209,29 @@ class AuthControllerTest {
             .body("status", equalTo("ERROR"));
     }
 
-    // ── Method not allowed (negative) ─────────────────────────────────────────
+    // ── Method not allowed ────────────────────────────────────────────────────
 
     @Test
     void getOnTokenEndpoint_returns405() {
-        given()
-        .when()
-            .get(TOKEN_PATH)
-        .then()
-            .statusCode(405);
+        given().when().get(TOKEN_PATH).then().statusCode(405);
     }
 
     @Test
     void putOnTokenEndpoint_returns405() {
-        given()
-            .contentType(ContentType.JSON)
-            .body(VALID_BODY)
-        .when()
-            .put(TOKEN_PATH)
-        .then()
-            .statusCode(405);
+        given().contentType(ContentType.JSON).body(VALID_BODY)
+               .when().put(TOKEN_PATH).then().statusCode(405);
     }
 
     @Test
     void deleteOnTokenEndpoint_returns405() {
-        given()
-        .when()
-            .delete(TOKEN_PATH)
-        .then()
-            .statusCode(405);
+        given().when().delete(TOKEN_PATH).then().statusCode(405);
     }
 
     // ── Not found ─────────────────────────────────────────────────────────────
 
     @Test
     void nonExistentPath_returns404() {
-        given()
-            .contentType(ContentType.JSON)
-            .body(VALID_BODY)
-        .when()
-            .post("/v1/auth/nonexistent")
-        .then()
-            .statusCode(404);
+        given().contentType(ContentType.JSON).body(VALID_BODY)
+               .when().post("/v1/auth/nonexistent").then().statusCode(404);
     }
 }

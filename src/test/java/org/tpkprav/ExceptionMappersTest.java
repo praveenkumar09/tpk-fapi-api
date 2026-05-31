@@ -121,6 +121,15 @@ class ExceptionMappersTest {
         assertEquals(500, resp.getStatus());
     }
 
+    @Test
+    void mapWebApplication_409_returnsDuplicateUuidCode() {
+        RestResponse<ApiResponse<Object>> resp =
+                mappers.mapWebApplication(new WebApplicationException(409));
+        assertEquals(409, resp.getStatus());
+        assertEquals("DUPLICATE_UUID_001", resp.getEntity().error().code());
+        assertEquals("UUID already registered", resp.getEntity().error().message());
+    }
+
     // ── requestId fallback when context is empty ─────────────────────────────
 
     @Test

@@ -1,6 +1,8 @@
 package org.tpkprav;
 
 import org.junit.jupiter.api.Test;
+import org.tpkprav.client.dto.StoreRequest;
+import org.tpkprav.client.dto.StoreResponse;
 import org.tpkprav.api.ApiError;
 import org.tpkprav.api.ApiErrorDetail;
 import org.tpkprav.api.ApiResponse;
@@ -151,6 +153,46 @@ class ModelAndDtoTest {
     @Test
     void malformedTokenException_isInvalidTokenException() {
         assertTrue(new MalformedTokenException("m", new RuntimeException()) instanceof org.tpkprav.service.exception.InvalidTokenException);
+    }
+
+    // ── StoreRequest ─────────────────────────────────────────────────────────
+
+    @Test
+    void storeRequest_recordAccessors() {
+        StoreRequest req = new StoreRequest("S1234567D", "some-uuid");
+        assertEquals("S1234567D", req.nric());
+        assertEquals("some-uuid", req.uuid());
+    }
+
+    @Test
+    void storeRequest_equality() {
+        StoreRequest a = new StoreRequest("S1234567D", "u1");
+        StoreRequest b = new StoreRequest("S1234567D", "u1");
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    // ── StoreResponse ─────────────────────────────────────────────────────────
+
+    @Test
+    void storeResponse_storedValues() {
+        StoreResponse resp = new StoreResponse("stored", "Credential saved successfully");
+        assertEquals("stored", resp.status());
+        assertEquals("Credential saved successfully", resp.message());
+    }
+
+    @Test
+    void storeResponse_recordAccessors() {
+        StoreResponse resp = new StoreResponse("conflict", "UUID already registered");
+        assertEquals("conflict", resp.status());
+        assertEquals("UUID already registered", resp.message());
+    }
+
+    @Test
+    void storeResponse_equality() {
+        StoreResponse a = new StoreResponse("stored", "ok");
+        StoreResponse b = new StoreResponse("stored", "ok");
+        assertEquals(a, b);
     }
 
 }

@@ -1,5 +1,7 @@
 package org.tpkprav.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.inject.Inject;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Valid;
@@ -47,6 +49,9 @@ public class AuthController {
     @RestClient
     DbConnectorClient dbConnectorClient;
 
+    @Inject
+    ObjectMapper objectMapper;
+
     @ConfigProperty(name = "jwt.expiration-minutes")
     long expirationMinutes;
 
@@ -65,7 +70,11 @@ public class AuthController {
         log.info("requestId={} Token request received nric={} uuid={}",
                 reqId, MaskingUtils.maskNric(request.nric()), request.uuid());
 
-        StoreResponse stored = dbConnectorClient.store(new StoreRequest(request.nric(), request.uuid()), reqId);
+        StoreRequest storeRequest = new StoreRequest(request.nric(), request.uuid());
+        try {
+            log.debug("requestId={} --> db-connector store body={}", reqId, objectMapper.writeValueAsString(storeRequest));
+        } catch (JsonProcessingException ignored) { /* simple record, won't fail */ }
+        StoreResponse stored = dbConnectorClient.store(storeRequest, reqId);
         log.debug("requestId={} Credential stored status={}", reqId, stored.status());
 
         if (!"stored".equals(stored.status())) {
