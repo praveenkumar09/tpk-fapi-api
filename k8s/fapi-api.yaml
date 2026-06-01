@@ -171,6 +171,7 @@ spec:
   selector:
     app: fapi-api         # Routes traffic to pods with this label
   ports:
-    - port: 8080          # Port the Service listens on (external-facing inside the cluster)
-      targetPort: 8080    # Port on the pod to forward traffic to (containerPort above)
-  type: ClusterIP         # Internal-only; not reachable from outside the cluster
+    - port: 8080          # Port the Service listens on inside the cluster
+      targetPort: 8080    # Port on the pod container
+      nodePort: 30080     # Fixed port on the node — access via http://localhost:30080 on Docker Desktop
+  type: NodePort          # NodePort on Docker Desktop maps directly to localhost:<nodePort>
