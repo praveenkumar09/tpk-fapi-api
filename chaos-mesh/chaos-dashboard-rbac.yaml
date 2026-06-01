@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: chaos-dashboard-sa
+  namespace: fapi
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: chaos-dashboard-cluster-role
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "nodes", "pods", "services", "events", "configmaps"]
+    verbs: ["get", "list", "watch"]
+
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+
+  - apiGroups: ["chaos-mesh.org"]
+    resources: ["*"]
+    verbs: ["*"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: chaos-dashboard-cluster-rolebinding
+subjects:
+  - kind: ServiceAccount
+    name: chaos-dashboard-sa
+    namespace: fapi
+roleRef:
+  kind: ClusterRole
+  name: chaos-dashboard-cluster-role
+  apiGroup: rbac.authorization.k8s.io
