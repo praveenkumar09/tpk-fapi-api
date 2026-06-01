@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fapi-api
+  namespace: fapi
+---
+# Stork queries the K8s API to discover db-connector endpoints for load balancing
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fapi-api-stork
+  namespace: fapi
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fapi-api-stork
+  namespace: fapi
+subjects:
+  - kind: ServiceAccount
+    name: fapi-api
+    namespace: fapi
+roleRef:
+  kind: Role
+  name: fapi-api-stork
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fapi-api-secret
+  namespace: fapi
+type: Opaque
+stringData:
+  # Must decode to >= 32 bytes. Replace with your production key.
+  jwt-secret: "REPLACE_WITH_BASE64_HMAC_KEY"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fapi-api
+  namespace: fapi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fapi-api
+  template:
+    metadata:
+      labels:
+        app: fapi-api
+        stack: fapi
+    spec:
+      nodeSelector:
+        fapi-stack: "true"
+      serviceAccountName: fapi-api
+      containers:
+        - name: fapi-api
+          image: tpk-fapi-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: fapi-api-secret
+                  key: jwt-secret
+            # Override the namespace configured in application.properties
+            - name: QUARKUS_STORK_DB_CONNECTOR_SERVICE_DISCOVERY_K8S_NAMESPACE
+              value: fapi
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fapi-api
+  namespace: fapi
+spec:
+  selector:
+    app: fapi-api
+  ports:
+    - port: 8080
+      targetPort: 8080
+  type: ClusterIP
