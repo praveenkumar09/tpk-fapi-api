@@ -95,7 +95,7 @@ spec:
         - name: fapi-api
           # Image built from tpk-fapi-api/Dockerfile.
           # For minikube: eval $(minikube docker-env) && docker build -t tpk-fapi-api:latest .
-          image: tpk-fapi-api:latest
+          image: fapi-fapi-api:latest   # name Docker Compose assigned: <project-dir>-<service-name>
           # Never: always use the image already present in the node's image cache.
           # Required for locally built images not pushed to a registry.
           # Build and load into minikube first:
