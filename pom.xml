@@ -65,9 +65,16 @@
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-stork</artifactId>
         </dependency>
+        <!-- Kubernetes provider — used in K8s (overrides type via env var in fapi-api.yaml) -->
         <dependency>
             <groupId>io.smallrye.stork</groupId>
             <artifactId>stork-service-discovery-kubernetes</artifactId>
+        </dependency>
+        <!-- Static-list provider — default type; used in Docker Compose and dev (no network calls at startup) -->
+        <dependency>
+            <groupId>io.smallrye.stork</groupId>
+            <artifactId>stork-service-discovery-static-list</artifactId>
+            <version>2.7.9</version>
         </dependency>
 
 
