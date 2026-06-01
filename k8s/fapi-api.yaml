@@ -88,11 +88,7 @@ spec:
         app: fapi-api     # Must match selector.matchLabels above
         stack: fapi       # Used by nodeSelector affinity if co-location is needed
     spec:
-      # Constrain all fapi-stack pods to the same node for local testing.
-      # Before deploying run: kubectl label node <node-name> fapi-stack=true
-      # For minikube: kubectl label node minikube fapi-stack=true
-      nodeSelector:
-        fapi-stack: "true"
+      # nodeSelector removed — not needed for local single-node clusters (minikube/kind).
       # Use the ServiceAccount that holds Stork's RBAC permissions.
       serviceAccountName: fapi-api
       containers:
@@ -100,9 +96,12 @@ spec:
           # Image built from tpk-fapi-api/Dockerfile.
           # For minikube: eval $(minikube docker-env) && docker build -t tpk-fapi-api:latest .
           image: tpk-fapi-api:latest
-          # IfNotPresent — use the locally loaded image; don't pull from a registry.
-          # Required when loading images directly into minikube/kind.
-          imagePullPolicy: IfNotPresent
+          # Never: always use the image already present in the node's image cache.
+          # Required for locally built images not pushed to a registry.
+          # Build and load into minikube first:
+          #   eval $(minikube docker-env)
+          #   docker build -t tpk-fapi-api:latest .
+          imagePullPolicy: Never
           ports:
             - containerPort: 8080   # Must match quarkus.http.port=8080 in application.properties
           env:
