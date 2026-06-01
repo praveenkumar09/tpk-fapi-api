@@ -70,6 +70,7 @@
             <artifactId>stork-service-discovery-kubernetes</artifactId>
         </dependency>
 
+
         <!-- MicroProfile REST Client -->
         <dependency>
             <groupId>io.quarkus</groupId>

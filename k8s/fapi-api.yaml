@@ -1,106 +1,177 @@
+# ── ServiceAccount ────────────────────────────────────────────────────────────
+# A ServiceAccount gives the fapi-api pod an identity inside the cluster.
+# Stork uses this identity to call the Kubernetes API and discover db-connector
+# endpoints. Without a dedicated ServiceAccount the pod would use "default",
+# which has no permissions to read endpoints.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: fapi-api
-  namespace: fapi
+  name: fapi-api          # Name referenced by the Deployment's serviceAccountName
+  namespace: fapi         # Must be in the same namespace as the Deployment
 ---
-# Stork queries the K8s API to discover db-connector endpoints for load balancing
+# ── Role ──────────────────────────────────────────────────────────────────────
+# A Role grants permissions scoped to a single namespace (fapi).
+# Stork Kubernetes service discovery needs to:
+#   • list/watch Endpoints  — to find which pod IPs back the db-connector Service
+#   • list/watch EndpointSlices — modern alternative to Endpoints (K8s ≥ 1.17);
+#     Stork checks for EndpointSlices first and falls back to Endpoints if absent.
+#     Without this permission Stork throws an API error on startup.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: fapi-api-stork
+  name: fapi-api-stork    # Name referenced by the RoleBinding below
   namespace: fapi
 rules:
+  # Core API group — covers the classic Endpoints resource.
+  # Each Endpoints object maps a Service name to a list of pod IP:port pairs.
   - apiGroups: [""]
     resources: ["endpoints"]
+    verbs: ["get", "list", "watch"]   # watch = receive change notifications in real time
+  # discovery.k8s.io API group — covers EndpointSlices.
+  # EndpointSlices are the newer, scalable replacement for Endpoints.
+  # Stork uses them to detect when a pod becomes unhealthy and removes it
+  # from its load-balancing pool — this is what enables the failover test.
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
     verbs: ["get", "list", "watch"]
 ---
+# ── RoleBinding ───────────────────────────────────────────────────────────────
+# Binds the Role above to the fapi-api ServiceAccount, activating the permissions.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: fapi-api-stork
+  name: fapi-api-stork    # Arbitrary name; kept same as Role for clarity
   namespace: fapi
 subjects:
+  # The ServiceAccount that gets the permissions.
   - kind: ServiceAccount
-    name: fapi-api
+    name: fapi-api        # Must match the ServiceAccount name above
     namespace: fapi
 roleRef:
+  # The Role that defines what permissions are granted.
   kind: Role
-  name: fapi-api-stork
+  name: fapi-api-stork    # Must match the Role name above
   apiGroup: rbac.authorization.k8s.io
 ---
+# ── Secret ────────────────────────────────────────────────────────────────────
+# Stores the HMAC key used to sign and verify JWT tokens.
+# Maps to application.properties: jwt.secret=${JWT_SECRET:<default>}
+# stringData lets you write the raw value; Kubernetes base64-encodes it at rest.
+# IMPORTANT: replace the placeholder before deploying to any real environment.
 apiVersion: v1
 kind: Secret
 metadata:
-  name: fapi-api-secret
+  name: fapi-api-secret   # Referenced in the Deployment env section below
   namespace: fapi
-type: Opaque
+type: Opaque              # Generic secret — no special Kubernetes handling
 stringData:
-  # Must decode to >= 32 bytes. Replace with your production key.
-  jwt-secret: "REPLACE_WITH_BASE64_HMAC_KEY"
+  # The value must base64-decode to at least 32 bytes (required for HMAC-SHA256).
+  # Generate a safe key: openssl rand -base64 32
+  jwt-secret: "5qjvxMeJvQ9qWyIho48ndKEfY22apEkzIJ2aTh7yDj0="
 ---
+# ── Deployment ────────────────────────────────────────────────────────────────
+# Manages the fapi-api pods. A Deployment ensures the desired replica count is
+# always running and handles rolling updates with zero downtime.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: fapi-api
+  name: fapi-api          # Name used by kubectl and other resources to refer to this
   namespace: fapi
 spec:
-  replicas: 1
+  replicas: 1             # Single instance — scale up here if needed
   selector:
     matchLabels:
-      app: fapi-api
-  template:
+      app: fapi-api       # Deployment manages pods with this label
+  template:               # Pod template — every pod created from this spec
     metadata:
       labels:
-        app: fapi-api
-        stack: fapi
+        app: fapi-api     # Must match selector.matchLabels above
+        stack: fapi       # Used by nodeSelector affinity if co-location is needed
     spec:
+      # Constrain all fapi-stack pods to the same node for local testing.
+      # Before deploying run: kubectl label node <node-name> fapi-stack=true
+      # For minikube: kubectl label node minikube fapi-stack=true
       nodeSelector:
         fapi-stack: "true"
+      # Use the ServiceAccount that holds Stork's RBAC permissions.
       serviceAccountName: fapi-api
       containers:
         - name: fapi-api
+          # Image built from tpk-fapi-api/Dockerfile.
+          # For minikube: eval $(minikube docker-env) && docker build -t tpk-fapi-api:latest .
           image: tpk-fapi-api:latest
+          # IfNotPresent — use the locally loaded image; don't pull from a registry.
+          # Required when loading images directly into minikube/kind.
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 8080
+            - containerPort: 8080   # Must match quarkus.http.port=8080 in application.properties
           env:
+            # ── JWT secret ──────────────────────────────────────────────────
+            # Injects the HMAC signing key as the JWT_SECRET environment variable.
+            # Quarkus reads: jwt.secret=${JWT_SECRET:<base64-default>}
+            # The default in application.properties is only for local dev — never use it in K8s.
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: fapi-api-secret
-                  key: jwt-secret
-            # Override the namespace configured in application.properties
+                  name: fapi-api-secret   # Secret defined above
+                  key: jwt-secret         # Key inside the Secret's data map
+            # ── Stork service discovery ──────────────────────────────────────
+            # These two env vars configure Stork at runtime (no stork config in
+            # application.properties — see comments there for why).
+            #
+            # TYPE=kubernetes tells Stork to query the Kubernetes API for endpoints.
+            # Stork watches the "db-connector" Service's endpoints in real time.
+            # When a db-connector pod dies, K8s removes it from the Endpoints object,
+            # Stork's watch fires, and it stops routing requests to that pod.
+            # This is exactly what makes the failover test work.
+            - name: QUARKUS_STORK_DB_CONNECTOR_SERVICE_DISCOVERY_TYPE
+              value: kubernetes
+            # Namespace where Stork should look for the "db-connector" Service.
+            # Must match the namespace of the db-connector Deployment and Service.
             - name: QUARKUS_STORK_DB_CONNECTOR_SERVICE_DISCOVERY_K8S_NAMESPACE
               value: fapi
+          # ── Readiness probe ──────────────────────────────────────────────
+          # Kubernetes only sends traffic to a pod once the readiness probe passes.
+          # tcpSocket just checks the port is open — no HTTP endpoint needed.
+          # initialDelaySeconds: wait 30s before the first check (JVM startup time).
+          # failureThreshold: allow up to 5 failures (50s) before marking unready.
           readinessProbe:
             tcpSocket:
               port: 8080
             initialDelaySeconds: 30
             periodSeconds: 10
             failureThreshold: 5
+          # ── Liveness probe ───────────────────────────────────────────────
+          # If this probe fails, Kubernetes restarts the container.
+          # Starts later than readiness to give the app time to fully initialise.
           livenessProbe:
             tcpSocket:
               port: 8080
             initialDelaySeconds: 60
             periodSeconds: 15
+          # ── Resource limits ──────────────────────────────────────────────
+          # requests: the minimum guaranteed resources; used by the scheduler.
+          # limits:   the maximum the container can use before being throttled/OOMed.
           resources:
             requests:
-              cpu: 250m
-              memory: 512Mi
+              cpu: 250m       # 0.25 vCPU guaranteed
+              memory: 512Mi   # 512 MiB guaranteed
             limits:
-              cpu: 500m
-              memory: 1Gi
+              cpu: 500m       # Throttled at 0.5 vCPU
+              memory: 1Gi     # OOMKilled if exceeded
 ---
+# ── Service ───────────────────────────────────────────────────────────────────
+# A stable ClusterIP for fapi-api. Other pods inside the cluster reach fapi-api
+# via http://fapi-api:8080 — the IP never changes even as pods are replaced.
 apiVersion: v1
 kind: Service
 metadata:
-  name: fapi-api
+  name: fapi-api          # DNS name other pods use: fapi-api.fapi.svc.cluster.local
   namespace: fapi
 spec:
   selector:
-    app: fapi-api
+    app: fapi-api         # Routes traffic to pods with this label
   ports:
-    - port: 8080
-      targetPort: 8080
-  type: ClusterIP
+    - port: 8080          # Port the Service listens on (external-facing inside the cluster)
+      targetPort: 8080    # Port on the pod to forward traffic to (containerPort above)
+  type: ClusterIP         # Internal-only; not reachable from outside the cluster
